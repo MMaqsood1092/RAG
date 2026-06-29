@@ -80,8 +80,14 @@ export async function ingestFile(
     const text = await extractText(filePath);
     console.log(`Extracted text length: ${text.length}`);
     
-    const chunks = await chunkText(text);
-    console.log(`Created ${chunks.length} chunks`);
+    // Determine file type for intelligent chunking
+    const ext = path.extname(filePath).toLowerCase();
+    let fileType = 'text';
+    if (ext === '.csv') fileType = 'csv';
+    else if (ext === '.xlsx' || ext === '.xls') fileType = 'excel';
+    
+    const chunks = await chunkText(text, fileType);
+    console.log(`Created ${chunks.length} sections`);
     
     if (chunks.length === 0) {
       console.warn(`⚠️  No chunks created for ${filePath}`);
@@ -94,7 +100,7 @@ export async function ingestFile(
     let embeddingDimension = 0;
     const firstBatch = chunks.slice(0, 50);
     
-    console.log(`Embedding first batch of ${firstBatch.length} chunks...`);
+    console.log(`Embedding first batch of ${firstBatch.length} sections (with rate limiting)...`);
     const firstEmbeddings = await embedBatch(
       firstBatch.map((c) => c.pageContent),
       embeddingProvider,
@@ -129,7 +135,7 @@ export async function ingestFile(
     }
 
     // Insert first batch
-    console.log(`Inserting ${firstBatch.length} chunks...`);
+    console.log(`Inserting ${firstBatch.length} sections...`);
     for (let j = 0; j < firstBatch.length; j++) {
       await pool.query(
         `INSERT INTO chunks (id, document_id, content, embedding, metadata)
@@ -143,19 +149,19 @@ export async function ingestFile(
         ]
       );
     }
-    console.log(`✅ Inserted first batch of ${firstBatch.length} chunks`);
+    console.log(`✅ Inserted first batch of ${firstBatch.length} sections`);
 
     // Process remaining batches
     for (let i = 50; i < chunks.length; i += 50) {
       const batch = chunks.slice(i, i + 50);
-      console.log(`Embedding batch ${i}-${i + batch.length}...`);
+      console.log(`Embedding batch ${i}-${i + batch.length} (with rate limiting)...`);
       const embeddings = await embedBatch(
         batch.map((c) => c.pageContent),
         embeddingProvider,
         embeddingModel
       );
 
-      console.log(`Inserting ${batch.length} chunks...`);
+      console.log(`Inserting ${batch.length} sections...`);
       for (let j = 0; j < batch.length; j++) {
         await pool.query(
           `INSERT INTO chunks (id, document_id, content, embedding, metadata)
@@ -169,7 +175,7 @@ export async function ingestFile(
           ]
         );
       }
-      console.log(`✅ Inserted batch of ${batch.length} chunks`);
+      console.log(`✅ Inserted batch of ${batch.length} sections`);
     }
     
     console.log(`✅ Successfully ingested ${filePath}`);

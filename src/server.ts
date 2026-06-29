@@ -50,19 +50,16 @@ app.get("/health", async (req: Request, res: Response): Promise<void> => {
 
 app.post("/chat", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { question, conversationId } = req.body;
+    const { question } = req.body;
 
     if (!question) {
       res.status(400).json({ error: "Question is required" });
       return;
     }
 
-    const result = await chat(question, conversationId ?? null);
+    const result = await chat(question);
 
-    res.json({
-      answer: result.answer,
-      conversationId: result.conversationId,
-    });
+    res.json(result);
     return;
   } catch (err) {
     console.error(err);
