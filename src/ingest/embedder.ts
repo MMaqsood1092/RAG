@@ -5,20 +5,13 @@ const VOYAGE_BASE_URL = "https://api.voyageai.com/v1";
 
 type EmbedProvider = "voyage" | "huggingface";
 
-// Rate limiting for Voyage free tier: 3 RPM = 1 request per 20 seconds
-const VOYAGE_MIN_REQUEST_INTERVAL_MS = 20000; // 20 seconds
+const VOYAGE_MIN_REQUEST_INTERVAL_MS = 20000;
 let lastVoyageRequestTime = 0;
 
-/**
- * Sleep for specified milliseconds
- */
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-/**
- * Wait to respect rate limits
- */
 async function waitForRateLimit(): Promise<void> {
   const now = Date.now();
   const timeSinceLastRequest = now - lastVoyageRequestTime;
@@ -42,12 +35,10 @@ export async function embedBatch(
     return huggingfaceService.embed(texts, modelId || "sentence-transformers/all-mpnet-base-v2");
   }
 
-  // Default to Voyage
   return embedBatchVoyage(texts);
 }
 
 async function embedBatchVoyage(texts: string[], retries = 0): Promise<number[][]> {
-  // Wait to respect rate limits
   await waitForRateLimit();
 
   const response = await fetch(`${VOYAGE_BASE_URL}/embeddings`, {
@@ -64,12 +55,11 @@ async function embedBatchVoyage(texts: string[], retries = 0): Promise<number[][
   });
 
   if (response.status === 429) {
-    // Rate limited - wait and retry
     const retryAfter = response.headers.get('Retry-After');
     const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : VOYAGE_MIN_REQUEST_INTERVAL_MS * 2;
     
     if (retries < 3) {
-      console.warn(`⚠️  Rate limited (429). Retrying after ${Math.ceil(waitTime / 1000)}s (attempt ${retries + 1}/3)...`);
+      console.warn(`Rate limited (429). Retrying after ${Math.ceil(waitTime / 1000)}s (attempt ${retries + 1}/3)...`);
       await sleep(waitTime);
       return embedBatchVoyage(texts, retries + 1);
     } else {

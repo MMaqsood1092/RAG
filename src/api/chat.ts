@@ -40,7 +40,7 @@ export async function chat(question: string): Promise<ChatResult> {
       const score = calculateCosineSimilarity(embedding, row.embedding);
       return {
         content: row.content,
-        score: Math.round(score * 1000) / 1000, // Round to 3 decimals
+        score: Math.round(score * 1000) / 1000,
       };
     });
 
@@ -92,7 +92,6 @@ async function embedQuery(text: string): Promise<number[]> {
  * Calculate cosine similarity between two vectors
  */
 function calculateCosineSimilarity(vec1: number[], vec2: string): number {
-  // Parse vector string if needed (e.g., "[1.0, 2.0, ...]")
   let vec2Array: number[] = [];
   if (typeof vec2 === "string") {
     const cleaned = vec2.replace(/[\[\]]/g, "");
