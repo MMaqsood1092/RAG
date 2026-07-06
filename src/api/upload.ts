@@ -8,8 +8,10 @@ import { ingestFile } from "../ingest/pipeline";
  * Handles file uploads from the frontend.
  * Accepts multiple files, stores them in the uploads folder,
  * and ingests them into the vector database.
+ * CRITICAL: Associates documents with tenant_id for multi-tenancy
  *
  * Request: multipart/form-data with files in "files" field
+ * Requires: Authorization header with valid API key
  * Response: { success: boolean, message: string, files: UploadedFile[] }
  */
 

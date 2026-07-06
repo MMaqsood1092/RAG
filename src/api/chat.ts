@@ -1,5 +1,7 @@
 import { pool } from "../db/client";
 import { config } from "../config";
+import { ChatResponse, ChunkSearchResult } from "../types";
+import { Request } from "express";
 
 const VOYAGE_BASE_URL = "https://api.voyageai.com/v1";
 
@@ -7,47 +9,95 @@ const VOYAGE_BASE_URL = "https://api.voyageai.com/v1";
 const VOYAGE_MIN_REQUEST_INTERVAL_MS = 20000; // 20 seconds
 let lastVoyageRequestTime = 0;
 
-interface ChunkResult {
-  content: string;
-  score: number;
-}
-
-interface ChatResult {
-  results: ChunkResult[];
-}
-
 /**
- * Query the vector database using Voyage embeddings
+ * Multi-tenant chat query using Voyage embeddings
  * Returns matching chunks with relevance scores (no LLM generation, no history)
+ * CRITICAL: Filters by tenant_id for data isolation
  */
-export async function chat(question: string): Promise<ChatResult> {
+export async function chat(
+  req: Request,
+  question: string,
+  filters?: any
+): Promise<ChatResponse> {
+  const startTime = Date.now();
+  
   try {
+    if (!req.tenant_id) {
+      throw new Error('Tenant ID is required');
+    }
+
     // Generate embedding for the query
     const embedding = await embedQuery(question);
 
-    // Vector search - get top 10 most relevant chunks
+    // Build dynamic WHERE clause based on filters
+    let whereClause = 'c.tenant_id = $1';
+    const params: any[] = [req.tenant_id];
+    let paramIndex = 2;
+
+    // Filter by specific document if provided
+    if (filters?.doc_id) {
+      whereClause += ` AND c.document_id = $${paramIndex}`;
+      params.push(filters.doc_id);
+      paramIndex++;
+    }
+
+    // Filter by access level if provided
+    if (filters?.access_level) {
+      whereClause += ` AND c.access_level = $${paramIndex}`;
+      params.push(filters.access_level);
+      paramIndex++;
+    }
+
+    // Add embedding vector as param
     const embeddingVector = `[${embedding.join(",")}]`;
+    params.push(embeddingVector);
+
+    // Vector search - get top 10 most relevant chunks
+    // CRITICAL: Filter by tenant_id BEFORE vector search for security
     const { rows } = await pool.query<{
+      id: string;
+      document_id: string;
       content: string;
       embedding: string;
+      access_level: string;
+      metadata?: any;
     }>(
-      `SELECT content, embedding FROM chunks ORDER BY embedding <=> $1::vector LIMIT 10`,
-      [embeddingVector]
+      `SELECT c.id, c.document_id, c.content, c.embedding, c.access_level, c.metadata
+       FROM chunks c
+       WHERE ${whereClause}
+       ORDER BY c.embedding <=> $${paramIndex}::vector
+       LIMIT 10`,
+      params
     );
 
     // Calculate similarity scores for results
-    const results: ChunkResult[] = rows.map((row) => {
+    const results: ChunkSearchResult[] = rows.map((row) => {
       const score = calculateCosineSimilarity(embedding, row.embedding);
       return {
+        id: row.id,
+        tenant_id: req.tenant_id!,
+        document_id: row.document_id,
         content: row.content,
+        access_level: row.access_level as 'private' | 'shared' | 'public',
+        metadata: row.metadata,
         score: Math.round(score * 1000) / 1000,
       };
     });
 
-    return { results };
+    const executionTime = Date.now() - startTime;
+
+    return {
+      results,
+      execution_time_ms: executionTime,
+      tokens_used: Math.ceil(question.length / 4), // Rough estimate
+    };
   } catch (err) {
     console.error("Chat query failed:", err);
-    return { results: [] };
+    const executionTime = Date.now() - startTime;
+    return {
+      results: [],
+      execution_time_ms: executionTime,
+    };
   }
 }
 
