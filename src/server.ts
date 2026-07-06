@@ -2,15 +2,15 @@ import express, { Request, Response } from "express";
 import multer from "multer";
 import { chat } from "./api/chat";
 import { uploadAndIngest } from "./api/upload";
-import {
-  invokeModel,
-  embedTexts,
-  answerQuestion,
-  classifyText,
-  summarizeText,
-  extractNER,
-  generateText,
-} from "./api/models";
+// import {
+//   invokeModel,
+//   embedTexts,
+//   answerQuestion,
+//   classifyText,
+//   summarizeText,
+//   extractNER,
+//   generateText,
+// } from "./api/models";
 import { config } from "./config";
 import { pool } from "./db/client";
 
@@ -76,29 +76,30 @@ app.post("/chat", async (req: Request, res: Response): Promise<void> => {
 app.post("/upload", upload.array("files", 20), uploadAndIngest);
 
 /**
- * HuggingFace Model Integration Endpoints
+ * DISABLED: HuggingFace Model Integration Endpoints
+ * TODO: Enable when multi-model support is implemented
  */
 
-// Generic model invocation
-app.post("/models/invoke", invokeModel);
+// // Generic model invocation
+// app.post("/models/invoke", invokeModel);
 
-// Embedding endpoint (supports both Voyage and HuggingFace)
-app.post("/models/embed", embedTexts);
+// // Embedding endpoint (supports both Voyage and HuggingFace)
+// app.post("/models/embed", embedTexts);
 
-// Question Answering
-app.post("/models/qa", answerQuestion);
+// // Question Answering
+// app.post("/models/qa", answerQuestion);
 
-// Text Classification
-app.post("/models/classify", classifyText);
+// // Text Classification
+// app.post("/models/classify", classifyText);
 
-// Summarization
-app.post("/models/summarize", summarizeText);
+// // Summarization
+// app.post("/models/summarize", summarizeText);
 
-// Named Entity Recognition
-app.post("/models/ner", extractNER);
+// // Named Entity Recognition
+// app.post("/models/ner", extractNER);
 
-// Text Generation
-app.post("/models/generate", generateText);
+// // Text Generation
+// app.post("/models/generate", generateText);
 
 app.listen(config.port, () => {
   console.log(`🚀 Server on port ${config.port}`);

@@ -6,10 +6,8 @@ import { chunkText } from "./chunker";
 import { embedBatch } from "./embedder";
 import { pool } from "../db/client";
 
-/** Canonical directory for all attachments; ingest:attachments runs on this folder. */
 export const ATTACHMENTS_DIR = path.join(__dirname, "..", "Attachments");
 
-// File extensions we consider ingestible
 const INGEST_EXTENSIONS = new Set([
   ".txt",
   ".md",
@@ -31,32 +29,25 @@ const INGEST_EXTENSIONS = new Set([
 
 async function ensureDocumentsTableUpdated() {
   try {
-    // Check if new columns exist
     const result = await pool.query(
       `SELECT column_name FROM information_schema.columns 
        WHERE table_name = 'documents' AND column_name = 'embedding_model'`
     );
     
     if (result.rows.length === 0) {
-      // Drop existing index first (it has fixed dimensions)
       await pool.query(`DROP INDEX IF EXISTS idx_chunks_embedding;`);
-      
-      // Recreate chunks table without dimension constraint
       await pool.query(`
         ALTER TABLE chunks
         ALTER COLUMN embedding TYPE vector USING embedding::vector;
       `).catch(() => {
-        // Silently ignore if already the right type
       });
       
-      // Add missing columns
       await pool.query(`
         ALTER TABLE documents 
         ADD COLUMN embedding_model TEXT DEFAULT 'voyage-default',
         ADD COLUMN embedding_dimension INT DEFAULT 1024;
       `);
       
-      // Recreate index with flexible dimensions
       await pool.query(`
         CREATE INDEX idx_chunks_embedding
         ON chunks
@@ -80,7 +71,6 @@ export async function ingestFile(
     const text = await extractText(filePath);
     console.log(`Extracted text length: ${text.length}`);
     
-    // Determine file type for intelligent chunking
     const ext = path.extname(filePath).toLowerCase();
     let fileType = 'text';
     if (ext === '.csv') fileType = 'csv';
@@ -90,13 +80,12 @@ export async function ingestFile(
     console.log(`Created ${chunks.length} sections`);
     
     if (chunks.length === 0) {
-      console.warn(`⚠️  No chunks created for ${filePath}`);
+      console.warn(`No chunks created for ${filePath}`);
       return;
     }
 
     const docId = uuid();
 
-    // Get first embedding to determine dimension
     let embeddingDimension = 0;
     const firstBatch = chunks.slice(0, 50);
     
@@ -113,7 +102,6 @@ export async function ingestFile(
 
     const modelName = embeddingModel || `${embeddingProvider}-default`;
 
-    // Insert document with embedding metadata
     try {
       await pool.query(
         `INSERT INTO documents (id, path, embedding_model, embedding_dimension) 
@@ -122,7 +110,6 @@ export async function ingestFile(
       );
       console.log(`✅ Inserted document ${docId}`);
     } catch (err: any) {
-      // If embedding_model column doesn't exist, use fallback
       if (err.code === "42703") {
         await pool.query(
           `INSERT INTO documents (id, path) VALUES ($1, $2)`,
@@ -134,7 +121,6 @@ export async function ingestFile(
       }
     }
 
-    // Insert first batch
     console.log(`Inserting ${firstBatch.length} sections...`);
     for (let j = 0; j < firstBatch.length; j++) {
       await pool.query(
@@ -151,7 +137,6 @@ export async function ingestFile(
     }
     console.log(`✅ Inserted first batch of ${firstBatch.length} sections`);
 
-    // Process remaining batches
     for (let i = 50; i < chunks.length; i += 50) {
       const batch = chunks.slice(i, i + 50);
       console.log(`Embedding batch ${i}-${i + batch.length} (with rate limiting)...`);
@@ -190,7 +175,6 @@ export async function ingestDirectory(
   embeddingProvider: "voyage" | "huggingface" = "voyage",
   embeddingModel?: string
 ) {
-  // Ensure table is updated
   await ensureDocumentsTableUpdated();
 
   const stats = fs.statSync(rootDir);

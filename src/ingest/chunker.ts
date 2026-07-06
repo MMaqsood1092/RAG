@@ -5,10 +5,6 @@ const splitter = new RecursiveCharacterTextSplitter({
   chunkOverlap: 150,
 });
 
-// ----------------------------------------------------------------------------
-// Helper functions for detecting document structure
-// ----------------------------------------------------------------------------
-
 function isTOC(line: string): boolean {
   const trimmed = line.trim();
   return /^(table of contents|contents|index|chapter \d+.*\.\.\.\d+)/i.test(trimmed);
@@ -46,10 +42,6 @@ function detectHeadingLevel(line: string): number {
   const leadingSpaces = trimmed.match(/^\s*/)?.[0].length || 0;
   return Math.floor(leadingSpaces / 4) + 1;
 }
-
-// ----------------------------------------------------------------------------
-// CSV/Excel chunkers (unchanged – they work perfectly for tabular data)
-// ----------------------------------------------------------------------------
 
 function chunkCSVRowWise(text: string) {
   const lines = text.split('\n');
@@ -115,15 +107,10 @@ function chunkExcelRowWise(text: string) {
   return sections;
 }
 
-// ----------------------------------------------------------------------------
-// Section‑aware chunker for PDFs / general text documents (async)
-// ----------------------------------------------------------------------------
-
 async function chunkStructuredDocument(text: string) {
   const lines = text.split('\n');
   const elements: { type: 'heading' | 'bullet' | 'paragraph' | 'toc'; content: string; level?: number }[] = [];
 
-  // 1. Parse lines into elements
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) continue;
@@ -143,7 +130,6 @@ async function chunkStructuredDocument(text: string) {
     }
   }
 
-  // 2. Process elements: accumulate content under the current heading
   const headingStack: { text: string; level: number }[] = [];
   let currentSectionText = '';
   const finalChunks: { pageContent: string; metadata: any }[] = [];
@@ -155,7 +141,6 @@ async function chunkStructuredDocument(text: string) {
     const fullText = context ? `${context}\n${currentSectionText}` : currentSectionText;
 
     if (fullText.length > 900) {
-      // Split only the content (without context) and prepend context to each piece
       const subTexts = await splitter.splitText(currentSectionText);
       for (const sub of subTexts) {
         finalChunks.push({
@@ -176,37 +161,24 @@ async function chunkStructuredDocument(text: string) {
     if (el.type === 'toc') continue;
 
     if (el.type === 'heading') {
-      // Flush the previous section before switching headings
       await flushSection();
-
-      // Update heading stack (pop until we reach the correct level)
       const newLevel = el.level || 0;
       while (headingStack.length > 0 && headingStack[headingStack.length - 1].level >= newLevel) {
         headingStack.pop();
       }
       headingStack.push({ text: el.content, level: newLevel });
-      // Do not add the heading text to currentSectionText – it will be prepended later
       continue;
     }
-
-    // For bullets and paragraphs: append to the current section
     if (el.type === 'bullet' || el.type === 'paragraph') {
       currentSectionText += (currentSectionText ? '\n' : '') + el.content;
     }
   }
-
-  // Flush the last section
   await flushSection();
 
   return finalChunks;
 }
 
-// ----------------------------------------------------------------------------
-// Main exported function – routes to the correct chunker based on file type
-// ----------------------------------------------------------------------------
-
 export async function chunkText(text: string, fileType?: string) {
-  // Detect file type from content patterns if not provided
   if (!fileType) {
     if (text.includes('\nSheet:') || (text.includes(',') && text.split('\n').length > 2)) {
       fileType = text.includes('\nSheet:') ? 'excel' : 'csv';

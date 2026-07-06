@@ -13,6 +13,7 @@
     "ingest:check": "ts-node src/ingest/check.ts",
     "db:init": "ts-node src/db/init.ts",
     "db:migrate": "ts-node src/db/migrate-vector-dims.ts",
+    "db:migrate:multi-tenancy": "psql postgresql://raguser:ragpass@localhost:5432/rag -f src/db/migrations/001_add_multi_tenancy.sql",
     "db:import-csv": "ts-node src/db/import_csv.ts",
     "db:import-all-csv": "ts-node src/db/import_all_csv.ts"
   },
@@ -22,10 +23,12 @@
   "dependencies": {
     "@langchain/core": "^1.1.15",
     "@langchain/textsplitters": "^1.0.1",
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "csv-parse": "^5.5.6",
     "dotenv": "^16.6.1",
     "express": "^4.22.1",
+    "jsonwebtoken": "^9.0.2",
     "multer": "1.4.4-lts.1",
     "node-pptx-parser": "^1.0.1",
     "openai": "^4.20.0",
@@ -36,8 +39,10 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.7",
     "@types/multer": "^1.4.11",
     "@types/node": "^25.0.9",
     "@types/pg": "^8.10.9",
